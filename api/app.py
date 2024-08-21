@@ -4,39 +4,24 @@ import traceback
 import pandas as pd
 import os
 import sys
+import datetime
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../frontend/dist', static_url_path='/')
 CORS(app)
-
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve(path):
-    if path != "" and os.path.exists(app.static_folder + '/' + path):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
-
-@app.route('/api/test')
-def test():
-    return jsonify({"message": "API is working"})
 
 # Add the current directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.append(project_root)
 
+# Import your functions here
 from kpi_master_v1_07 import (
     load_initial_holdings, load_trades, load_product_info, load_client_sales,
     calculate_daily_holdings, calculate_daily_income, calculate_cumulative_income,
     show_income_statistics, generate_forecasts, generate_sales_person_breakdowns,
     generate_client_breakdowns
 )
-import datetime
 
-
-@app.route('/')
-def home():
-    return "Welcome to KPI Master API"
 
 def find_data_file(filename):
     possible_locations = [
@@ -50,35 +35,68 @@ def find_data_file(filename):
             return location
     raise FileNotFoundError(f"Could not find {filename} in any of the expected locations")
 
-# Load data
-start_date = datetime.date(2023, 12, 31)
-end_date = datetime.date(2024, 6, 30)
 
-try:
-    initial_holdings = load_initial_holdings(find_data_file('2023DEC.csv'))
-    trades = load_trades(find_data_file('TRADES_LOG.csv'))
-    product_info = load_product_info(find_data_file('PRODUCT_INFO.csv'))
-    client_sales = load_client_sales(find_data_file('CLIENT_LIST.csv'))
+# Global variables to store calculated data
+daily_income = {}
+sales_income = {}
+client_income = {}
+fund_stats = None
+forecasts = None
+sales_person_breakdowns = {}
+client_breakdowns = {}
 
-    # Calculate data
-    daily_holdings = calculate_daily_holdings(initial_holdings, trades, start_date, end_date)
-    daily_income, sales_income, client_income = calculate_daily_income(daily_holdings, product_info, client_sales)
-    cumulative_sales_income = calculate_cumulative_income(sales_income)
-    cumulative_client_income = calculate_cumulative_income(client_income)
-    client_stats, fund_stats, sales_stats = show_income_statistics(daily_income, sales_income, client_income, daily_holdings, product_info)
-    forecasts = generate_forecasts(daily_income, product_info, daily_holdings, trades, end_date)
-    sales_person_breakdowns = generate_sales_person_breakdowns(daily_income, client_sales)
-    client_breakdowns = generate_client_breakdowns(daily_income)
-except Exception as e:
-    print(f"Error during data loading and processing: {str(e)}")
-    print(traceback.format_exc())
+
+def load_and_process_data():
+    global daily_income, sales_income, client_income, fund_stats, forecasts, sales_person_breakdowns, client_breakdowns
+
+    start_date = datetime.date(2023, 12, 31)
+    end_date = datetime.date(2024, 6, 30)
+
+    try:
+        initial_holdings = load_initial_holdings(find_data_file('2023DEC.csv'))
+        trades = load_trades(find_data_file('TRADES_LOG.csv'))
+        product_info = load_product_info(find_data_file('PRODUCT_INFO.csv'))
+        client_sales = load_client_sales(find_data_file('CLIENT_LIST.csv'))
+
+        daily_holdings = calculate_daily_holdings(initial_holdings, trades, start_date, end_date)
+        daily_income, sales_income, client_income = calculate_daily_income(daily_holdings, product_info, client_sales)
+        cumulative_sales_income = calculate_cumulative_income(sales_income)
+        cumulative_client_income = calculate_cumulative_income(client_income)
+        client_stats, fund_stats, sales_stats = show_income_statistics(daily_income, sales_income, client_income,
+                                                                       daily_holdings, product_info)
+        forecasts = generate_forecasts(daily_income, product_info, daily_holdings, trades, end_date)
+        sales_person_breakdowns = generate_sales_person_breakdowns(daily_income, client_sales)
+        client_breakdowns = generate_client_breakdowns(daily_income)
+    except Exception as e:
+        print(f"Error during data loading and processing: {str(e)}")
+        print(traceback.format_exc())
+
+
+# Load data on startup
+load_and_process_data()
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    return app.send_static_file('index.html')
+
+
+@app.route('/api/test')
+def test():
+    return jsonify({"message": "API is working"})
+
 
 @app.route('/api/dashboard')
 def get_dashboard():
-    total_income = sum(sum(client.values()) for client in daily_income[max(daily_income.keys())].values())
-    total_clients = len(client_income[max(client_income.keys())])
-    total_funds = len(fund_stats)
-    total_sales = len(sales_income[max(sales_income.keys())])
+    if not daily_income:
+        return jsonify({"error": "Data not loaded"}), 500
+
+    latest_date = max(daily_income.keys())
+    total_income = sum(sum(client.values()) for client in daily_income[latest_date].values())
+    total_clients = len(client_income[latest_date])
+    total_funds = len(fund_stats) if fund_stats is not None else 0
+    total_sales = len(sales_income[latest_date])
 
     income_trend = [{'date': date.isoformat(), 'income': sum(sum(client.values()) for client in clients.values())}
                     for date, clients in daily_income.items()]
@@ -94,20 +112,20 @@ def get_dashboard():
 
 @app.route('/api/sales')
 def get_sales():
+    if not sales_income:
+        return jsonify({"error": "Data not loaded"}), 500
+
     sales_data = {
         'salesPersons': [],
         'dailyContribution': [],
         'individualPerformance': {}
     }
 
-    # Prepare daily contribution data
     for date in sales_income.keys():
         daily_data = {'date': date.isoformat()}
-        for sales_person in sales_income[date].keys():
-            daily_data[sales_person] = sales_income[date][sales_person]
+        daily_data.update({sp: income for sp, income in sales_income[date].items()})
         sales_data['dailyContribution'].append(daily_data)
 
-    # Prepare individual performance and sales persons data
     for sales_person in set(person for daily in sales_income.values() for person in daily.keys()):
         sales_data['individualPerformance'][sales_person] = []
         cumulative_income = 0
@@ -117,14 +135,10 @@ def get_sales():
         for date, daily in sales_income.items():
             if sales_person in daily:
                 cumulative_income += daily[sales_person]
-
-                # Get actual client and fund data
                 client_data = sales_person_breakdowns[date][sales_person]['clients']
                 fund_data = sales_person_breakdowns[date][sales_person]['funds']
-
                 clients.update(client_data.keys())
                 funds.update(fund_data.keys())
-
                 sales_data['individualPerformance'][sales_person].append({
                     'date': date.isoformat(),
                     'income': daily[sales_person],
@@ -139,23 +153,14 @@ def get_sales():
             'topFunds': list(funds)
         })
 
-    # Calculate cumulative data for individual performance
-    for sales_person in sales_data['individualPerformance']:
-        cumulative_clients = {}
-        cumulative_funds = {}
-        for day in sales_data['individualPerformance'][sales_person]:
-            for client, amount in day['clients'].items():
-                cumulative_clients[client] = cumulative_clients.get(client, 0) + amount
-            for fund, amount in day['funds'].items():
-                cumulative_funds[fund] = cumulative_funds.get(fund, 0) + amount
-            day['clients'] = dict(cumulative_clients)
-            day['funds'] = dict(cumulative_funds)
-
     return jsonify(sales_data)
 
 
 @app.route('/api/clients')
 def get_clients():
+    if not client_income:
+        return jsonify({"error": "Data not loaded"}), 500
+
     latest_date = max(client_income.keys())
     return jsonify([
         {'name': client, 'income': income}
@@ -165,33 +170,20 @@ def get_clients():
 
 @app.route('/api/funds')
 def get_funds():
+    if fund_stats is None:
+        return jsonify({"error": "Data not loaded"}), 500
+
     try:
-        app.logger.info("Entering get_funds route")
-
-        # Check if fund_stats is defined and has the expected structure
-        if fund_stats is None:
-            raise ValueError("fund_stats is None")
-
-        if not isinstance(fund_stats, pd.DataFrame):
-            raise TypeError(f"fund_stats is not a DataFrame. Type: {type(fund_stats)}")
-
-        # Convert fund_stats DataFrame to a dictionary, converting dates to strings
         funds_dict = fund_stats.reset_index().to_dict(orient='records')
-        app.logger.info(f"Converted fund_stats to dictionary. Number of records: {len(funds_dict)}")
-
-        # Process the dictionary to match the expected format
-        processed_funds = {}
-        for record in funds_dict:
-            fund = str(record.get('index', 'Unknown'))  # Convert index to string
-            processed_funds[fund] = {
+        processed_funds = {
+            str(record.get('index', 'Unknown')): {
                 'mean': record.get('mean', 0),
                 'std': record.get('std', 0),
                 'min': record.get('min', 0),
                 'max': record.get('max', 0),
                 'count': record.get('count', 0)
-            }
-
-        app.logger.info(f"Processed funds data. Number of funds: {len(processed_funds)}")
+            } for record in funds_dict
+        }
         return jsonify(processed_funds)
     except Exception as e:
         app.logger.error(f"Error in get_funds: {str(e)}")
@@ -201,6 +193,8 @@ def get_funds():
 
 @app.route('/api/forecast')
 def get_forecast():
+    if forecasts is None:
+        return jsonify({"error": "Data not loaded"}), 500
     return jsonify(forecasts)
 
 
