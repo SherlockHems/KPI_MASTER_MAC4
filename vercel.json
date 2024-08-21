@@ -3,8 +3,7 @@
   "builds": [
     {
       "src": "api/app.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "15mb" }
+      "use": "@vercel/python"
     },
     {
       "src": "frontend/package.json",
