@@ -7,8 +7,8 @@ import sys
 
 # Add the current directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+project_root = os.path.dirname(current_dir)
+sys.path.append(project_root)
 
 from kpi_master_v1_07 import (
     load_initial_holdings, load_trades, load_product_info, load_client_sales,
@@ -18,24 +18,23 @@ from kpi_master_v1_07 import (
 )
 import datetime
 
-app = Flask(__name__, static_folder='../frontend/dist', static_url_path='')
+app = Flask(__name__)
 CORS(app)
 
 @app.route('/')
-def serve():
-    return send_from_directory(app.static_folder, 'index.html')
-
-@app.route('/<path:path>')
-def static_proxy(path):
-    return send_from_directory(app.static_folder, path)
+def home():
+    return "Welcome to KPI Master API"
 
 # Load data
 start_date = datetime.date(2023, 12, 31)
 end_date = datetime.date(2024, 6, 30)
-initial_holdings = load_initial_holdings(os.path.join(parent_dir, 'data', '2023DEC.csv'))
-trades = load_trades(os.path.join(parent_dir, 'data', 'TRADES_LOG.csv'))
-product_info = load_product_info(os.path.join(parent_dir, 'data', 'PRODUCT_INFO.csv'))
-client_sales = load_client_sales(os.path.join(parent_dir, 'data', 'CLIENT_LIST.csv'))
+
+# Use absolute paths for data files
+data_dir = os.path.join(project_root, 'data')
+initial_holdings = load_initial_holdings(os.path.join(data_dir, '2023DEC.csv'))
+trades = load_trades(os.path.join(data_dir, 'TRADES_LOG.csv'))
+product_info = load_product_info(os.path.join(data_dir, 'PRODUCT_INFO.csv'))
+client_sales = load_client_sales(os.path.join(data_dir, 'CLIENT_LIST.csv'))
 
 # Calculate data
 daily_holdings = calculate_daily_holdings(initial_holdings, trades, start_date, end_date)
