@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: kpi-master-api
+    env: python
+    buildCommand: pip install -r api/requirements.txt
+    startCommand: gunicorn api.app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+  - type: web
+    name: kpi-master-frontend
+    env: static
+    buildCommand: cd frontend && npm run render-build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
