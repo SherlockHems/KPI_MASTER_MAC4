@@ -3,12 +3,13 @@ services:
     name: kpi-master-api
     env: python
     buildCommand: |
-      apt-get update && apt-get install -y build-essential libatlas-base-dev
-      pip install -r api/requirements.txt
-    startCommand: gunicorn api.app:app
+      apt-get update && apt-get install -y build-essential libatlas-base-dev gfortran
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.0
+        value: 3.9.13
   - type: web
     name: kpi-master-frontend
     env: static
