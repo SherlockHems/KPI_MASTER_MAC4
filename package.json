@@ -1,6 +1,6 @@
 {
   "scripts": {
     "postinstall": "cd frontend && npm install && npm run build",
-    "start": "cd api && python app.py"
+    "start": "python app.py"
   }
 }
