@@ -25,26 +25,40 @@ CORS(app)
 def home():
     return "Welcome to KPI Master API"
 
+def find_data_file(filename):
+    possible_locations = [
+        os.path.join(project_root, 'data', filename),
+        os.path.join(current_dir, 'data', filename),
+        os.path.join('/opt/render/project/src/data', filename),
+        os.path.join('/app/data', filename),
+    ]
+    for location in possible_locations:
+        if os.path.exists(location):
+            return location
+    raise FileNotFoundError(f"Could not find {filename} in any of the expected locations")
+
 # Load data
 start_date = datetime.date(2023, 12, 31)
 end_date = datetime.date(2024, 6, 30)
 
-# Use absolute paths for data files
-data_dir = os.path.join(project_root, 'data')
-initial_holdings = load_initial_holdings(os.path.join(data_dir, '2023DEC.csv'))
-trades = load_trades(os.path.join(data_dir, 'TRADES_LOG.csv'))
-product_info = load_product_info(os.path.join(data_dir, 'PRODUCT_INFO.csv'))
-client_sales = load_client_sales(os.path.join(data_dir, 'CLIENT_LIST.csv'))
+try:
+    initial_holdings = load_initial_holdings(find_data_file('2023DEC.csv'))
+    trades = load_trades(find_data_file('TRADES_LOG.csv'))
+    product_info = load_product_info(find_data_file('PRODUCT_INFO.csv'))
+    client_sales = load_client_sales(find_data_file('CLIENT_LIST.csv'))
 
-# Calculate data
-daily_holdings = calculate_daily_holdings(initial_holdings, trades, start_date, end_date)
-daily_income, sales_income, client_income = calculate_daily_income(daily_holdings, product_info, client_sales)
-cumulative_sales_income = calculate_cumulative_income(sales_income)
-cumulative_client_income = calculate_cumulative_income(client_income)
-client_stats, fund_stats, sales_stats = show_income_statistics(daily_income, sales_income, client_income, daily_holdings, product_info)
-forecasts = generate_forecasts(daily_income, product_info, daily_holdings, trades, end_date)
-sales_person_breakdowns = generate_sales_person_breakdowns(daily_income, client_sales)
-client_breakdowns = generate_client_breakdowns(daily_income)
+    # Calculate data
+    daily_holdings = calculate_daily_holdings(initial_holdings, trades, start_date, end_date)
+    daily_income, sales_income, client_income = calculate_daily_income(daily_holdings, product_info, client_sales)
+    cumulative_sales_income = calculate_cumulative_income(sales_income)
+    cumulative_client_income = calculate_cumulative_income(client_income)
+    client_stats, fund_stats, sales_stats = show_income_statistics(daily_income, sales_income, client_income, daily_holdings, product_info)
+    forecasts = generate_forecasts(daily_income, product_info, daily_holdings, trades, end_date)
+    sales_person_breakdowns = generate_sales_person_breakdowns(daily_income, client_sales)
+    client_breakdowns = generate_client_breakdowns(daily_income)
+except Exception as e:
+    print(f"Error during data loading and processing: {str(e)}")
+    print(traceback.format_exc())
 
 @app.route('/api/dashboard')
 def get_dashboard():
