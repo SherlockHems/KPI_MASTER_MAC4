@@ -2,21 +2,13 @@ services:
   - type: web
     name: kpi-master-api
     env: python
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
-    startCommand: gunicorn api.app:app --bind 0.0.0.0:$PORT
+    buildCommand: pip install -r api/requirements.txt && cd frontend && npm install && npm run build
+    startCommand: gunicorn api.app:app
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.13
-      - key: PYTHONUNBUFFERED
-        value: "1"
+        value: 3.9.0
   - type: web
     name: kpi-master-frontend
     env: static
-    buildCommand: cd frontend && npm run render-build
+    buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

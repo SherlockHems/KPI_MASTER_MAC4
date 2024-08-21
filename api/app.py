@@ -5,6 +5,21 @@ import pandas as pd
 import os
 import sys
 
+app = Flask(__name__)
+CORS(app)
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists(app.static_folder + '/' + path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/api/test')
+def test():
+    return jsonify({"message": "API is working"})
+
 # Add the current directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
@@ -18,8 +33,6 @@ from kpi_master_v1_07 import (
 )
 import datetime
 
-app = Flask(__name__)
-CORS(app)
 
 @app.route('/')
 def home():
