@@ -1,0 +1,9 @@
+{
+  "name": "kip-master-v1",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "cd frontend && npm run dev",
+    "build": "cd frontend && npm install && npm run build"
+  }
+}
